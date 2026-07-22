@@ -112,6 +112,7 @@ ffprobe -version
 - Ensure you have sufficient RAM and CPU resources
 
 ### Project Structure
+```
 video-trimmer-compressor/
 │
 ├── app.py
@@ -120,3 +121,4 @@ video-trimmer-compressor/
 ├── README.md
 ├── static/
 └── templates/
+```
