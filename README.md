@@ -1,6 +1,6 @@
 # Video Trimmer & Compressor
 
-A Flask-based web application for trimming and compressing video files using FFmpeg.
+A Flask-based web application for trimming, multi-cut editing, previewing, and compressing videos using FFmpeg with customizable codecs, quality, and export settings..
 ## Main Interface
 
 ![Main Interface](images/vtc3.png)
@@ -110,3 +110,14 @@ ffprobe -version
 - Large video files may take time to process
 - Consider using a lower CRF value for faster processing (at the cost of larger file size)
 - Ensure you have sufficient RAM and CPU resources
+
+### Project Structure
+video-trimmer-compressor/
+│
+├── app.py
+├── requirements.txt
+├── setup.bat
+├── README.md
+├── static/
+├── templates/
+└── images/
