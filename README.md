@@ -86,8 +86,11 @@ ffprobe -version
 - Timeline slider for precise segment selection
 - Real-time video preview
 - Live "Final Output Preview" player that lets you scrub & play only the kept (non-cut) portions before exporting (Play/Pause + seek slider that automatically skips cut ranges)
-- Progress tracking during processing
+- Video, audio codec, container changer and converter.
+- Batch processing (concurrency control, single preset/ individual preset for each video)
+- Video merger (single preset/ individual preset for each video)
 - Video compression with configurable CRF
+- Dark mode
 - Automatic cleanup of temporary files
 - Error handling and user feedback
 
