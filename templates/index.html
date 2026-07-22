@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Trimmer & Compressor</title>
+    {% if file_size_bytes is defined %}
+    <meta name="video-info" data-bytes="{{ file_size_bytes }}" data-bitrate-kbps="{{ bitrate_kbps or 0 }}"
+        data-src-vcodec="{{ src_vcodec or 'h264' }}" data-src-acodec="{{ src_acodec or 'aac' }}" data-src-container="{{ src_container or 'mp4' }}">
+    {% endif %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='nouislider.min.css') }}?v={{ v }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v={{ v }}">
+    <script src="{{ url_for('static', filename='nouislider.min.js') }}?v={{ v }}"></script>
+    <script src="{{ url_for('static', filename='app.js') }}?v={{ v }}"></script>
+    <script>
+    // Apply saved or system theme ASAP
+    (function(){
+        try {
+            var saved = localStorage.getItem('theme');
+            var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var theme = saved || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        } catch {}
+    })();
+    </script>
+    
+</head>
+<body>
+<div class="container">
+    <!-- App title -->
+    <h2>Video Trimmer & Compressor</h2>
+    <!-- Subheader: processing mode and theme toggle -->
+    <div id="subheader" class="subheader">
+        <label for="processing-mode" style="font-weight:600;">Mode:</label>
+        <select id="processing-mode" style="padding:6px 8px;">
+            <option value="single" selected>Single video</option>
+            <option value="batch">Batch processing</option>
+        </select>
+        <div class="spacer-left" style="display:flex; align-items:center; gap:8px;">
+            <button id="btn-theme-emoji" class="theme-emoji-btn" type="button" title="Toggle Light/Dark" aria-label="Toggle Light/Dark">🌝</button>
+        </div>
+    </div>
+    <div id="single-upload-section" style="margin-bottom:8px;">
+        <form method="POST" enctype="multipart/form-data">
+            <label>Upload Video:</label>
+            <input type="file" name="video" accept="video/*" required onchange="this.form.submit()">
+        </form>
+    </div>
+
+    <!-- Ensure mode toggle works even before app.js initializes -->
+    <script>
+    (function(){
+        function bindModeToggle(){
+            try {
+                var modeSel = document.getElementById('processing-mode');
+                var batchPanel = document.getElementById('batch-panel');
+                var singleUpload = document.getElementById('single-upload-section');
+                if (!modeSel || !batchPanel || !singleUpload) return;
+                if (modeSel.dataset.modeBound === '1') return;
+                // Restore saved mode if present
+                try {
+                    var saved = localStorage.getItem('processingMode');
+                    if (saved === 'single' || saved === 'batch') modeSel.value = saved;
+                } catch(e) {}
+                var apply = function(){
+                    var isSingle = modeSel.value === 'single';
+                    batchPanel.style.display = isSingle ? 'none' : 'block';
+                    singleUpload.style.display = isSingle ? 'block' : 'none';
+                };
+                modeSel.addEventListener('change', function(){
+                    try { localStorage.setItem('processingMode', modeSel.value); } catch(e){}
+                    // Avoid double reload if multiple handlers fire
+                    if (window._modeSwitchReloadInProgress) return;
+                    window._modeSwitchReloadInProgress = true;
+                    // Immediate full refresh to clear prior uploads/UI state
+                    location.reload();
+                });
+                modeSel.dataset.modeBound = '1';
+                apply();
+                // Proactively bind batch UI once elements are visible (idempotent in app.js)
+                try { if (typeof setupBatchUI === 'function') setupBatchUI(); } catch(e){}
+            } catch(e) { /* no-op */ }
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bindModeToggle);
+        } else {
+            bindModeToggle();
+        }
+    })();
+    </script>
+
+    <!-- Batch Processing Panel -->
+    <!-- Batch processing panel -->
+    <div id="batch-panel" class="panel" style="margin-top:14px; display:none;">
+        <h3 style="margin:4px 0 10px 0; font-size:16px;">Batch Processing</h3>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <input type="file" id="batch-files" accept="video/*" multiple style="max-width:420px;">
+            <label for="batch-concurrency">Concurrency:</label>
+            <select id="batch-concurrency">
+                <option value="auto" selected>Auto</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+            </select>
+            <label for="batch-preset-mode">Preset:</label>
+            <select id="batch-preset-mode" title="Choose single preset for all videos, or custom per video">
+                <option value="single" selected>Single preset (all videos)</option>
+                <option value="custom">Custom per video</option>
+            </select>
+            <button type="button" id="btn-batch-upload" style="padding:6px 12px;">Upload Files</button>
+            <button type="button" id="btn-batch-cancel" style="padding:6px 12px; background:#dc3545; display:none;">Cancel Batch</button>
+        </div>
+        <small id="batch-help-text" style="color:#555; display:block; margin-top:6px;">Batch uses the current cut ranges, codecs, resolution and compression settings you’ve selected above.</small>
+        <div id="batch-files-list" style="margin-top:10px; font-size:13px;"></div>
+        <div id="batch-overall" style="margin-top:10px; display:none;">
+            <div style="font-weight:600; margin-bottom:4px;">Overall Progress</div>
+            <div style="width:100%; background:#eee; height:14px; border-radius:4px; overflow:hidden;">
+                <div id="batch-overall-bar" style="width:0%; height:100%; background:#17a2b8;"></div>
+            </div>
+        </div>
+        <div id="batch-jobs" style="margin-top:10px;"></div>
+    </div>
+
+    {% if not video_filename %}
+    <!-- Settings grid (Video/Audio/Compression) for Batch/No-video state -->
+    <div class="settings-grid">
+        <div class="settings-card min-250">
+            <h3 style="margin-top:0; font-size:15px;">Video Settings</h3>
+            <label for="video_codec">Video codec:</label>
+            <select id="video_codec" style="margin-bottom:8px; width:100%;">
+                <option value="h264">H.264 (AVC)</option>
+                <option value="hevc">H.265 (HEVC)</option>
+                <option value="vp8">VP8</option>
+                <option value="vp9">VP9</option>
+                <option value="av1">AV1</option>
+                <option value="prores">ProRes</option>
+                <option value="dnxhd">DNxHD / DNxHR</option>
+            </select>
+            <label for="container">Container:</label>
+            <select id="container" style="width:100%;">
+                <option value="mp4">MP4</option>
+                <option value="mov">MOV</option>
+                <option value="webm">WebM</option>
+                <option value="mkv">MKV</option>
+            </select>
+        </div>
+        <div class="settings-card min-220">
+            <h3 style="margin-top:0; font-size:15px;">Audio Settings</h3>
+            <label for="audio_codec">Audio codec:</label>
+            <select id="audio_codec" style="margin-bottom:8px; width:100%;">
+                <option value="aac">AAC</option>
+                <option value="mp3">MP3</option>
+                <option value="opus">Opus</option>
+                <option value="vorbis">Vorbis</option>
+                <option value="flac">FLAC (lossless)</option>
+            </select>
+            <label for="audio_bitrate_preset">Audio bitrate:</label>
+            <select id="audio_bitrate_preset" style="width:100%; margin-bottom:4px;">
+                <option value="original" selected>Original (source)</option>
+                <option value="32">32 kbps (Min)</option>
+                <option value="64">64 kbps</option>
+                <option value="96">96 kbps</option>
+                <option value="128">128 kbps</option>
+                <option value="160">160 kbps</option>
+                <option value="192">192 kbps</option>
+                <option value="256">256 kbps</option>
+                <option value="320">320 kbps</option>
+            </select>
+            <small class="muted" style="display:block;">Choose lower values for speech, higher for music. "Original" keeps source bitrate.</small>
+        </div>
+        <div class="settings-card min-300 span-2">
+            <h3 style="margin-top:0; font-size:15px;">Compression Settings</h3>
+            <label for="mode">Mode:</label>
+            <select id="mode" style="width:100%; margin-bottom:8px;">
+                <option value="copy">Copy (no re-encode)</option>
+                <option value="quality" selected>Quality % (higher is better)</option>
+                <option value="size">Target File Size (MB)</option>
+                <option value="crf">Advanced: CRF</option>
+            </select>
+            <label for="resolution">Resolution:</label>
+            <select id="resolution" style="width:100%; margin-bottom:6px;">
+                <option value="original" selected>Original</option>
+                <option value="1080p">1920x1080 (1080p)</option>
+                <option value="720p">1280x720 (720p)</option>
+                <option value="480p">854x480 (480p)</option>
+                <option value="360p">640x360 (360p)</option>
+                <option value="240p">426x240 (240p)</option>
+                <option value="custom">Custom…</option>
+            </select>
+            <span id="custom-res" style="display:none;">
+                <input id="custom_width" type="number" min="160" max="3840" placeholder="Width" style="width:90px;">
+                ×
+                <input id="custom_height" type="number" min="120" max="2160" placeholder="Height" style="width:90px;">
+            </span>
+            <div id="opt_quality" style="margin-top:8px;">
+                <label>Quality (%):</label>
+                <input id="quality_percent" type="number" min="1" max="100" value="100" style="width:80px;"> <small>(100 = best)</small>
+            </div>
+            <div id="opt_size" style="margin-top:8px; display:none;">
+                <label>Target size (MB):</label>
+                <input id="target_size_mb" type="number" min="1" value="31" style="width:100px;">
+            </div>
+            <div id="opt_crf" style="margin-top:8px; display:none;">
+                <label>CRF:</label>
+                <input id="crf_value" type="number" min="18" max="35" value="28" style="width:80px;"> <small>(lower = better)</small>
+            </div>
+            <button style="margin-top:12px; width:100%;" onclick="submitCuts()">Start Processing</button>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div style="background: #f8d7da; color: #721c24; padding: 20px; border: 1px solid #f5c6cb; border-radius: 5px; margin: 15px 0;">
+        <strong>⚠ Error:</strong> {{ error }}
+        {% if "FFmpeg" in error %}
+        <br><br>
+        <strong>Quick Setup Options:</strong>
+        <ul style="margin: 10px 0;">
+            <li>Run <code>setup.bat</code> in this folder for automated installation</li>
+            <li>Or manually install from <a href="https://ffmpeg.org/download.html" target="_blank">ffmpeg.org</a></li>
+            <li>Using Chocolatey: <code>choco install ffmpeg</code> (as admin)</li>
+        </ul>
+        <small>After installation, restart your terminal and refresh this page.</small>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if video_filename %}
+    <!-- Metrics Bar -->
+    <!-- Metrics bar: final duration + sizes -->
+    <div id="metrics-bar" class="metrics-bar">
+        <div style="min-width:120px;"><strong>Original Size:</strong><br><span id="orig-size">--</span></div>
+        <div style="min-width:120px;"><strong>Len-Ratio Est:</strong><br><span id="est-size-ratio">--</span></div>
+        <div style="min-width:180px;"><strong>Compression Est:</strong><br><span id="est-size-compression">--</span></div>
+         <div style="min-width:100px;"><strong>Final Duration:</strong><br><span id="final-duration-text">--</span></div>
+        <div style="min-width:100px;"><strong>Final Size:</strong><br><span id="actual-size">--</span></div>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <input type="file" id="clips-add-input" accept="video/*" multiple style="display:none;">
+            <button id="btn-add-video" type="button" title="Add one or more videos" style="padding:6px 12px;">Add Video</button>
+        </div>
+    </div>
+
+    <div id="video-wrap">
+        <video id="video" controls>
+            <source src="{{ url_for('uploaded_file', filename=video_filename) }}" type="video/mp4">
+        </video>
+    </div>
+    <!-- Controls + Kept Segments Preview -->
+    <!-- Timeline controls and kept-segments preview -->
+    <div id="controls-and-preview" class="controls-and-preview">
+        <div id="left-cut-controls" class="controls-group">
+                <button id="btn-add-cut" type="button" onclick="addCutOrPlace()" style="padding:4px 8px; font-size:12px; line-height:1.6;">➕ Add Cut</button>
+            <div class="controls-group">
+                <button type="button" id="zoom-out" style="padding:4px 8px; font-size:12px; line-height:1.5;">-</button>
+                <button type="button" id="zoom-in" style="padding:4px 8px; font-size:12px; line-height:1.5;">+</button>
+            </div>
+            <div class="controls-group">
+                <button type="button" id="btn-undo" style="padding:4px 8px; font-size:12px; line-height:1.2;">↩</button>
+                <button type="button" id="btn-redo" style="padding:4px 8px; font-size:12px; line-height:1.2;">↪</button>
+            </div>
+            <div class="controls-group">
+                <select id="selection-mode" style="padding:2px 4px; font-size:12px;">
+                    <option value="cut" selected>Cut</option>
+                    <option value="keep">Keep</option>
+                </select>
+            </div>
+        </div>
+        <div id="final-preview" class="final-preview">
+            <button type="button" id="btn-preview-play" style="padding:4px 10px; font-size:12px; line-height:1.6;">▶</button>
+            <input type="range" id="preview-slider" min="0" value="0" step="0.01" style="flex:1; height:18px;">
+            <span id="preview-time" class="mono tiny" style="width:80px; text-align:right;">00:00</span>
+        </div>
+    </div>
+
+    <div id="timeline-wrap">
+        <div id="timeline-slider" style="width:800px;"></div>
+    </div>
+    
+
+    <!-- Clips to Merge Panel -->
+    <div id="clips-panel" class="panel" style="margin-top:10px; display:none;">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <h3 style="margin:4px 0; font-size:16px;">Clips to Merge</h3>
+            <small class="muted">Add videos with the button above. Click a thumbnail to edit its cuts; drag thumbnails to reorder; then start merge using your current settings.</small>
+        </div>
+        <div id="clips-list" style="margin-top:8px; font-size:13px;"></div>
+        <small class="muted" style="display:block; margin-top:6px;">Merges in listed order. Drag to reorder. Each clip keeps its own cuts.</small>
+    </div>
+    
+    
+
+    <!-- Settings grid (Video/Audio/Compression) for Single-video state: placed before Progress so you trim first -->
+    <div class="settings-grid">
+        <div class="settings-card min-250">
+            <h3 style="margin-top:0; font-size:15px;">Video Settings</h3>
+            <label for="video_codec">Video codec:</label>
+            <select id="video_codec" style="margin-bottom:8px; width:100%;">
+                <option value="h264">H.264 (AVC)</option>
+                <option value="hevc">H.265 (HEVC)</option>
+                <option value="vp8">VP8</option>
+                <option value="vp9">VP9</option>
+                <option value="av1">AV1</option>
+                <option value="prores">ProRes</option>
+                <option value="dnxhd">DNxHD / DNxHR</option>
+            </select>
+            <label for="container">Container:</label>
+            <select id="container" style="width:100%;">
+                <option value="mp4">MP4</option>
+                <option value="mov">MOV</option>
+                <option value="webm">WebM</option>
+                <option value="mkv">MKV</option>
+            </select>
+        </div>
+        <div class="settings-card min-220">
+            <h3 style="margin-top:0; font-size:15px;">Audio Settings</h3>
+            <label for="audio_codec">Audio codec:</label>
+            <select id="audio_codec" style="margin-bottom:8px; width:100%;">
+                <option value="aac">AAC</option>
+                <option value="mp3">MP3</option>
+                <option value="opus">Opus</option>
+                <option value="vorbis">Vorbis</option>
+                <option value="flac">FLAC (lossless)</option>
+            </select>
+            <label for="audio_bitrate_preset">Audio bitrate:</label>
+            <select id="audio_bitrate_preset" style="width:100%; margin-bottom:4px;">
+                <option value="original" selected>Original (source)</option>
+                <option value="32">32 kbps (Min)</option>
+                <option value="64">64 kbps</option>
+                <option value="96">96 kbps</option>
+                <option value="128">128 kbps</option>
+                <option value="160">160 kbps</option>
+                <option value="192">192 kbps</option>
+                <option value="256">256 kbps</option>
+                <option value="320">320 kbps</option>
+            </select>
+            <small class="muted" style="display:block;">Choose lower values for speech, higher for music. "Original" keeps source bitrate.</small>
+        </div>
+        <div class="settings-card min-300 span-2">
+            <h3 style="margin-top:0; font-size:15px;">Compression Settings</h3>
+            <label for="mode">Mode:</label>
+            <select id="mode" style="width:100%; margin-bottom:8px;">
+                <option value="copy">Copy (no re-encode)</option>
+                <option value="quality" selected>Quality % (higher is better)</option>
+                <option value="size">Target File Size (MB)</option>
+                <option value="crf">Advanced: CRF</option>
+            </select>
+            <label for="resolution">Resolution:</label>
+            <select id="resolution" style="width:100%; margin-bottom:6px;">
+                <option value="original" selected>Original</option>
+                <option value="1080p">1920x1080 (1080p)</option>
+                <option value="720p">1280x720 (720p)</option>
+                <option value="480p">854x480 (480p)</option>
+                <option value="360p">640x360 (360p)</option>
+                <option value="240p">426x240 (240p)</option>
+                <option value="custom">Custom…</option>
+            </select>
+            <span id="custom-res" style="display:none;">
+                <input id="custom_width" type="number" min="160" max="3840" placeholder="Width" style="width:90px;">
+                ×
+                <input id="custom_height" type="number" min="120" max="2160" placeholder="Height" style="width:90px;">
+            </span>
+            <div id="opt_quality" style="margin-top:8px;">
+                <label>Quality (%):</label>
+                <input id="quality_percent" type="number" min="1" max="100" value="100" style="width:80px;"> <small>(100 = best)</small>
+            </div>
+            <div id="opt_size" style="margin-top:8px; display:none;">
+                <label>Target size (MB):</label>
+                <input id="target_size_mb" type="number" min="1" value="31" style="width:100px;">
+            </div>
+            <div id="opt_crf" style="margin-top:8px; display:none;">
+                <label>CRF:</label>
+                <input id="crf_value" type="number" min="18" max="35" value="28" style="width:80px;"> <small>(lower = better)</small>
+            </div>
+            <button style="margin-top:12px; width:100%;" onclick="submitCuts()">Start Processing</button>
+        </div>
+    </div>
+
+    <!-- Progress and cancel -->
+    <div class="row-center" style="margin-top:10px;">
+        <div id="progressBar" style="flex:1;"><div id="bar">0%</div></div>
+        <button id="btn-cancel" type="button" class="btn-danger" style="display:none;" onclick="cancelProcessing()">Stop</button>
+    </div>
+    <div id="result" style="margin-top:16px;">
+        <!-- Output preview & actions -->
+        <div id="preview" style="display:none;">
+            <h3 style="margin:8px 0;">Preview</h3>
+            <video id="preview-video" controls style="width:100%; border:1px solid #ddd; border-radius:6px;"></video>
+        </div>
+        <div id="actions" class="actions" style="display:none;">
+            <button id="btn-download" style="padding:10px 16px; border:none; color:#fff; border-radius:6px; cursor:pointer;">Download</button>
+            <a id="dl_link" href="#" style="display:none;">Download Link</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Initialize the video trimmer app when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initializeApp({{ duration|tojson if duration else 0 }}, {{ video_filename|tojson if video_filename else '""' }});
+    // Wire theme toggle
+    (function(){
+        var btnEmoji = document.getElementById('btn-theme-emoji');
+        function apply(theme){ document.documentElement.setAttribute('data-theme', theme); }
+        function setEmojiByTheme(theme){ if (!btnEmoji) return; btnEmoji.textContent = (theme === 'dark') ? '🌚' : '🌝'; }
+        function getSaved(){ try { return localStorage.getItem('theme'); } catch { return null; } }
+        function currentTheme(){
+            var saved = getSaved();
+            if (saved === 'dark' || saved === 'light') return saved;
+            var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            return prefersDark ? 'dark' : 'light';
+        }
+        // Initialize emoji based on current theme (head script already applied data-theme)
+        setEmojiByTheme(currentTheme());
+        // Emoji click toggles between explicit light/dark and persists
+        if (btnEmoji) {
+            btnEmoji.addEventListener('click', function(){
+                var now = currentTheme();
+                var to = (now === 'dark') ? 'light' : 'dark';
+                try { localStorage.setItem('theme', to); } catch {}
+                apply(to);
+                setEmojiByTheme(to);
+            });
+        }
+        // If user has no explicit choice, keep emoji and theme in sync with OS
+        if (window.matchMedia) {
+            var mq = window.matchMedia('(prefers-color-scheme: dark)');
+            var handler = function(){
+                var saved = getSaved();
+                if (saved !== 'dark' && saved !== 'light') {
+                    var t = mq.matches ? 'dark' : 'light';
+                    apply(t);
+                    setEmojiByTheme(t);
+                }
+            };
+            if (mq.addEventListener) mq.addEventListener('change', handler);
+            else if (mq.addListener) mq.addListener(handler);
+        }
+    })();
+});
+</script>
+</body>
+</html>

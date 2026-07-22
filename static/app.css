@@ -1,0 +1,245 @@
+/* =====================================================
+    Theme variables and global styles
+    - Light/Dark palettes via CSS variables
+    - Used across panels, buttons, slider, tooltips, etc.
+    ===================================================== */
+:root {
+    --bg: #f7f7f7;
+    --fg: #111;
+    --panel-bg: #ffffff;
+    --panel-bg-soft: #fafafa;
+    --panel-border: #ddd;
+    --panel-border-soft: #eee;
+    --muted: #555;
+    --muted-strong: #333;
+    --button-bg: #007bff;
+    --button-hover: #0056b3;
+    --danger-bg: #dc3545;
+    --danger-hover: #c82333;
+    --accent: #17a2b8;
+    --success: #28a745;
+    --progress-bg: #ddd;
+    --slider-track: #e0e0e0;
+    --handle-bg: #ffffff;
+    --handle-border: #007bff;
+    --tooltip-bg: #333;
+    --tooltip-fg: #fff;
+    --shadow: 0 0 10px rgba(0,0,0,0.20);
+        --input-bg: #ffffff;
+        --input-fg: #111111;
+        --input-border: #cccccc;
+        --input-focus: #4ea7ff;
+}
+
+[data-theme="dark"] {
+    --bg: #0f1115;
+    --fg: #e6e6e6;
+    --panel-bg: #151922;
+    --panel-bg-soft: #1a1f2b;
+    --panel-border: #2a2f3a;
+    --panel-border-soft: #2a2f3a;
+    --muted: #aab0bd;
+    --muted-strong: #c8ccd5;
+    --button-bg: #2b6cb0;
+    --button-hover: #2c5282;
+    --danger-bg: #b52b3a;
+    --danger-hover: #922130;
+    --accent: #2aa7b8;
+    --success: #2fbf71;
+    --progress-bg: #2a2f3a;
+    --slider-track: #2a2f3a;
+    --handle-bg: #202633;
+    --handle-border: #4ea7ff;
+    --tooltip-bg: #1f2430;
+    --tooltip-fg: #e6e6e6;
+    --shadow: 0 0 10px rgba(0,0,0,0.45);
+        --input-bg: #202633;
+        --input-fg: #e6e6e6;
+        --input-border: #3a4252;
+        --input-focus: #4ea7ff;
+}
+
+/* Global layout */
+body { font-family: Arial; margin: 30px; background: var(--bg); color: var(--fg); }
+.container { background: var(--panel-bg); padding: 10px; border-radius: 10px; width: 850px; margin: auto; box-shadow: var(--shadow); }
+
+/* =====================================================
+    Utility and layout classes (replace inline styles)
+    ===================================================== */
+.subheader { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:6px 0 8px 0; }
+.spacer-left { margin-left:auto; }
+.controls-and-preview { display:flex; gap:6px; align-items:center; justify-content:space-between; margin-top:0; }
+.controls-group { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+.panel { padding:10px; border:1px solid var(--panel-border); border-radius:8px; background: var(--panel-bg); }
+.panel-soft { background: var(--panel-bg-soft) !important; }
+.metrics-bar { display:flex; flex-wrap:wrap; gap:18px; padding:1px 4px; border:1px solid var(--panel-border); border-radius:8px; background: var(--panel-bg); margin:4px 0; }
+.metrics-bar #btn-add-video { padding:6px 12px; }
+.panel-soft { border:1px solid var(--panel-border); }
+
+/* Clips grid */
+.clips-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+}
+.clip-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 6px;
+    cursor: pointer;
+    user-select: none;
+    text-align: center;
+}
+.clip-card.clip-current { outline: 2px solid var(--accent); outline-offset: 1px; }
+.clip-thumb-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 6px; overflow: hidden; display:flex; align-items:center; justify-content:center; }
+.clip-thumb { width: 100%; height: 100%; object-fit: cover; display:block; }
+.clip-thumb-placeholder { width:100%; height:100%; background: linear-gradient(135deg, #444, #222); }
+.clip-name { margin-top: 6px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clip-meta { margin-top: 2px; }
+.clip-card.drag-over { box-shadow: 0 0 0 2px var(--input-focus) inset; }
+.clip-card.dragging { opacity: 0.6; }
+
+/* Delete button overlay on thumbnails */
+.clip-delete {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--danger-bg);
+    border: 2px solid var(--danger-hover);
+    color: #fff;
+    font-weight: bold;
+    font-size: 14px;
+    line-height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.9;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
+.clip-delete:hover { opacity: 1; }
+.clip-delete:focus { outline: 2px solid var(--input-focus); outline-offset: 2px; }
+.final-preview { flex:1; min-width:320px; padding:4px 6px; border:1px solid var(--panel-border-soft); border-radius:4px; background: var(--panel-bg); display:flex; align-items:center; gap:6px; }
+.settings-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:16px; margin-top:16px; }
+.span-2 { grid-column: 1 / -1; }
+.settings-card { padding:12px; border:1px solid var(--panel-border); border-radius:6px; background: var(--panel-bg-soft); }
+.min-250 { min-width:250px; }
+.min-220 { min-width:220px; }
+.min-300 { min-width:300px; }
+.row-center { display:flex; align-items:center; gap:12px; }
+.actions { display:flex; gap:10px; align-items:center; margin-top:12px; }
+.muted { color: var(--muted); }
+.mono { font-family: monospace; }
+.small { font-size: 12px; }
+.tiny { font-size: 10px; }
+
+/* Responsive: collapse cards to single column on small screens */
+@media (max-width: 700px) {
+    .settings-grid { grid-template-columns: 1fr; }
+}
+
+/* Video elements */
+video { width: 100%; margin: 1px 0; border: 1px solid var(--panel-border); border-radius: 6px; display:block; }
+/* Fix main and preview video display height so portrait and landscape occupy same on-page height */
+#video, #preview-video { height: clamp(460px, 48vh, 520px); object-fit: contain; background: #000; }
+
+/* Timeline */
+#timeline-slider { margin: 27px 0px; }
+/* Ensure slider tooltips are not clipped */
+#timeline-wrap { overflow-x: auto; overflow-y: visible; padding-top: 1px; margin-top: 0px; margin-bottom: 3px; }
+.noUi-target { overflow: visible; }
+.noUi-tooltip { z-index: 1000; background: var(--tooltip-bg); color: var(--tooltip-fg); border:none; padding:3px 6px; font-size:11px; border-radius:4px; }
+/* Track and connect colors */
+.noUi-target, .noUi-horizontal .noUi-base { background: var(--slider-track); }
+.noUi-connect { background: var(--accent); }
+/* Square handle style */
+.noUi-horizontal .noUi-handle {
+    width: 15px;
+    height: 25px;
+    top: -5px;
+    right: -7px;
+    background: var(--handle-bg);
+    border: 2px solid var(--handle-border);
+    border-radius:4px;
+    box-shadow: 0 0 2px rgba(0,0,0,0.3);
+    cursor: pointer;
+}
+.noUi-horizontal .noUi-handle:before, .noUi-horizontal .noUi-handle:after { display:none; }
+/* Directional tooltip positioning: start handles (odd) below, end handles (even) above */
+.noUi-horizontal .noUi-base .noUi-origin:nth-child(odd) .noUi-tooltip { top: 100%; margin-top:4px; bottom:auto; }
+
+/* Light/Dark emoji button */
+.theme-emoji-btn {
+    font-size: 16px;
+    line-height: 1;
+    padding: 6px 8px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel-bg);
+    color: inherit;
+    border-radius: 18px;
+    cursor: pointer;
+}
+.theme-emoji-btn:hover { filter: brightness(0.95); }
+
+/* Buttons theme-aware styling */
+button,
+.btn {
+    background: var(--button-bg);
+    color: #fff;
+    border: 2px solid var(--button-hover);
+    border-radius: 6px;
+}
+button:hover,
+.btn:hover { background: var(--button-hover); }
+
+/* Danger buttons */
+.btn-danger,
+button.btn-danger,
+button#btn-batch-cancel,
+button#btn-cancel {
+    background: var(--danger-bg) !important;
+    border-color: var(--danger-hover) !important;
+    color: #fff !important;
+}
+.btn-danger:hover,
+button.btn-danger:hover,
+button#btn-batch-cancel:hover,
+button#btn-cancel:hover { background: var(--danger-hover) !important; }
+
+/* Download button */
+#btn-download {
+    background: var(--button-bg) !important;
+}
+#btn-download:hover { background: var(--button-hover) !important; }
+/* Muted text color helper */
+.container small { color: var(--muted) !important; }
+
+/* Form controls theming */
+select,
+input[type="number"],
+input[type="text"],
+input[type="file"],
+input[type="range"],
+textarea {
+    background: var(--input-bg);
+    color: var(--input-fg);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+}
+select:focus,
+input[type="number"]:focus,
+input[type="text"]:focus,
+input[type="file"]:focus,
+input[type="range"]:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 2px rgba(78,167,255,0.25);
+}
+
+/* Ensure labels and headings inherit theme foreground */
+label, h2, h3 { color: var(--fg); }
