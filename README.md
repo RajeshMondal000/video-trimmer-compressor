@@ -1,7 +1,10 @@
 # Video Trimmer & Compressor
 
 A Flask-based web application for trimming and compressing video files using FFmpeg.
-
+![Application Screenshot](images/vtc1.png)
+![Application Screenshot](images/vtc2.png)
+![Application Screenshot](images/vtc3.png)
+![Application Screenshot](images/vtc4.png)
 ## Prerequisites
 
 **FFmpeg is required** for this application to work. The app will display an error message if FFmpeg is not installed.
