@@ -119,5 +119,4 @@ video-trimmer-compressor/
 ├── setup.bat
 ├── README.md
 ├── static/
-├── templates/
-└── images/
+└── templates/
